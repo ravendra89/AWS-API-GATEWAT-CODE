@@ -1,0 +1,71 @@
+# How to download file from S3 via API Gateway USing Lambda
+import os
+import logging
+import json
+import base64
+import boto3
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+
+def lambda_handler(event, context):
+    logger.info(event)
+    try:
+        bucket_name = os.environ.get("BUCKET_NAME", None)
+        if event and bucket_name:
+            s3 = boto3.client("s3")
+            folder_name = event.get("pathParameters").get("folder")
+            file_name = event.get("queryStringParameters").get("file")
+
+            fileObj = s3.get_object(
+                Bucket=bucket_name, Key=f"{folder_name}/{file_name}"
+            )
+            file_content = fileObj["Body"].read()
+
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Content-Type": "application/pdf",
+                    "Content-Disposition": "attachment; filename={}".format(file_name),
+                },
+                "body": base64.b64encode(file_content),
+                "isBase64Encoded": True,
+            }
+        else:
+            return {
+                "statusCode": 500,
+                "body": json.dumps("Invalid invocation or Bucket name is not defined!"),
+            }
+
+    except Exception as e:
+        logger.error(e)
+        return {"statusCode": 500, "body": json.dumps("Error processing the request!")}
+
+
+
+# Steps for deployment-
+Note- on the line of 29 we can change contentent type-
+"Content-Type": "application/pdf" or "application.jpg" etc.
+
+1- create Lambd function
+2- copy and paste the code and then deploy the code on lambda function
+3- click on configuration-permission-click on IAM role and attached one additional policy that is-- AWSLambdaExecute and save it
+Note:- By default lambda have cloudwath logs permission
+4- click on configuration-Environment-variables-and set the below details-
+key- BUCKET_NAME ( that is specify in the line of 15 i.e-   bucket_name = os.environ.get("BUCKET_NAME", None)
+value- our s3 bucket name
+5- Now create REST API- protocal(REST)- Create new API (mention the name of API)-create
+6- now create resource ( name-any) - then create sub resource ( path parameter( it is dynamically means changeable)- name= {folder} ( that is mention on the code--ex.   folder_name = event.get("pathParameters").get("folder")
+7- Now click on path paramenter and create get method-select integration type= lambda- click on "use lambda proxy integration"-select region- mention lambda function name- use default time out- yes- then click on save
+8- now configuration query string parameter- click on method request-click on URL Query string parameter- Add query string- name= file ( because on code we spacified--   file_name = event.get("queryStringParameters").get("file")
+9- now click on required= yes- then go to setting and binary media type-( add binary media type= application/pdf)-now click on save changes
+10- Now deploy the api- mention new stage name and deploy
+11- Now test from postman-
+copy api endpoint URL- go to postman and paste- remove folder name(pathParameters) and mention s3 bucket folder name- then ?file=filename( name of the s3 bucket file name that need to bedownload)
+EX-https://igjy7x8ttd.execute-api.ap-south-1.amazonaws.com/v1/lambda/download?file=ANSIBLE.pdf
+12- Select method= get - then mention headors--
+key= Accept
+value- application/pdf
+13- Now test
+
